@@ -3,46 +3,46 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import json
+import re
 import together
-from pydantic import BaseModel, Field
 
-# Load Together API key from Streamlit secrets
-api_key = st.secrets["TOGETHER_API_KEY"]
-together.api_key = api_key  # Correct initialization
-
-# Define structured response schema
-class ChurnInsight(BaseModel):
-    title: str = Field(description="Insight title")
-    summary: str = Field(description="Brief summary of the insight")
-    actionItems: list[str] = Field(description="List of recommended actions")
+# Initialize Together client with API key from secrets
+together.api_key = st.secrets["TOGETHER_API_KEY"]
 
 # Generate AI churn insight
 def generate_churn_insight(df: pd.DataFrame):
     data_sample = df.sample(n=min(50, len(df)), random_state=1).to_csv(index=False)
     prompt = f"""
-    You are a data analyst. Analyze the following customer churn dataset (CSV format).
-    Provide a JSON response with:
-    {{
-      title: string,
-      summary: string,
-      actionItems: [string]
-    }}
+You are a data analyst. Analyze the following customer churn dataset (CSV format).
+Respond ONLY in JSON with the following keys:
+"title", "summary", "actionItems" (list of strings).
 
-    Data:
-    {data_sample}
-    """
+Data:
+{data_sample}
+"""
 
-    response = together.chat.completions.create(
+    response = together.Complete.create(
+        prompt=prompt,
         model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
-        messages=[
-            {"role": "system", "content": "You are a product analyst. Reply ONLY in JSON."},
-            {"role": "user", "content": prompt}
-        ],
-        response_format={"type": "json_object", "schema": ChurnInsight.model_json_schema()},
+        max_tokens=512,
+        temperature=0.7,
+        stop=["```", "</json>"]
     )
 
-    output = json.loads(response.choices[0].message.content)
-    return output
+    output_text = response["output"]["choices"][0]["text"].strip()
+
+    if not output_text:
+        raise ValueError("Empty response from model")
+
+    # Debug output (optional)
+    # st.code(output_text, language="json")
+
+    try:
+        json_text = re.search(r"\{.*\}", output_text, re.DOTALL).group()
+        return json.loads(json_text)
+    except Exception:
+        raise ValueError(f"Could not parse JSON. Model response:\n\n{output_text[:300]}")
+
 
 # Generate dummy data
 def generate_dummy_data():
@@ -61,6 +61,7 @@ def generate_dummy_data():
         'EstimatedSalary': [50000 + i * 1500 for i in range(20)],
         'Exited': [0, 1] * 10
     })
+
 
 # App Title and Branding
 st.title("🧭 InsightPilot")
