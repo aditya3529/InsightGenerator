@@ -3,30 +3,19 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import json
+import re
 import together
-from pydantic import BaseModel, Field
 
-# Set Together API key from Streamlit secrets
+# Initialize Together client with API key from secrets
 together.api_key = st.secrets["TOGETHER_API_KEY"]
-
-# Define structured response schema (for documentation clarity)
-class ChurnInsight(BaseModel):
-    title: str = Field(description="Insight title")
-    summary: str = Field(description="Brief summary of the insight")
-    actionItems: list[str] = Field(description="List of recommended actions")
-
 
 # Generate AI churn insight
 def generate_churn_insight(df: pd.DataFrame):
     data_sample = df.sample(n=min(50, len(df)), random_state=1).to_csv(index=False)
     prompt = f"""
 You are a data analyst. Analyze the following customer churn dataset (CSV format).
-Provide a JSON response with:
-{{
-  "title": string,
-  "summary": string,
-  "actionItems": [string]
-}}
+Respond ONLY in JSON with the following keys:
+"title", "summary", "actionItems" (list of strings).
 
 Data:
 {data_sample}
@@ -40,12 +29,19 @@ Data:
         stop=["```", "</json>"]
     )
 
-    output = response["output"]["choices"][0]["text"]
+    output_text = response["output"]["choices"][0]["text"].strip()
 
-    # Debug print (optional)
-    # st.code(output)
+    if not output_text:
+        raise ValueError("Empty response from model")
 
-    return json.loads(output)
+    # Debug output (optional)
+    # st.code(output_text, language="json")
+
+    try:
+        json_text = re.search(r"\{.*\}", output_text, re.DOTALL).group()
+        return json.loads(json_text)
+    except Exception:
+        raise ValueError(f"Could not parse JSON. Model response:\n\n{output_text[:300]}")
 
 
 # Generate dummy data
@@ -108,6 +104,7 @@ if df is not None:
         st.subheader("📌 Key KPIs")
         total_customers = len(df)
         churn_rate = df['Exited'].mean()
+        avg_age = df['Age'].mean()
         avg_credit = df['CreditScore'].mean()
 
         col1, col2, col3 = st.columns(3)
