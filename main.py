@@ -7,7 +7,7 @@ import together
 from pydantic import BaseModel, Field
 
 # Initialize Together client
-client = together.Together(api_key="YOUR_TOGETHER_API_KEY") 
+together.api_key = st.secrets["TOGETHER_API_KEY"] 
 
 
 # Define structured response schema
