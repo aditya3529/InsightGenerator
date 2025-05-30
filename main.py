@@ -6,11 +6,10 @@ import json
 import together
 from pydantic import BaseModel, Field
 
-# Initialize Together client
-together.api_key = st.secrets["TOGETHER_API_KEY"] 
+# Set Together API key from Streamlit secrets
+together.api_key = st.secrets["TOGETHER_API_KEY"]
 
-
-# Define structured response schema
+# Define structured response schema (for documentation clarity)
 class ChurnInsight(BaseModel):
     title: str = Field(description="Insight title")
     summary: str = Field(description="Brief summary of the insight")
@@ -19,45 +18,40 @@ class ChurnInsight(BaseModel):
 
 # Generate AI churn insight
 def generate_churn_insight(df: pd.DataFrame):
-    data_sample = df.sample(n=min(50, len(df)),
-                            random_state=1).to_csv(index=False)
+    data_sample = df.sample(n=min(50, len(df)), random_state=1).to_csv(index=False)
     prompt = f"""
-    You are a data analyst. Analyze the following customer churn dataset (CSV format).
-    Provide a JSON response with:
-    {{
-      title: string,
-      summary: string,
-      actionItems: [string]
-    }}
+You are a data analyst. Analyze the following customer churn dataset (CSV format).
+Provide a JSON response with:
+{{
+  "title": string,
+  "summary": string,
+  "actionItems": [string]
+}}
 
-    Data:
-    {data_sample}
-    """
+Data:
+{data_sample}
+"""
 
-    response = client.chat.completions.create(
+    response = together.Complete.create(
+        prompt=prompt,
         model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
-        messages=[{
-            "role": "system",
-            "content": "You are a product analyst. Reply ONLY in JSON."
-        }, {
-            "role": "user",
-            "content": prompt
-        }],
-        response_format={
-            "type": "json_object",
-            "schema": ChurnInsight.model_json_schema()
-        },
+        max_tokens=512,
+        temperature=0.7,
+        stop=["```", "</json>"]
     )
 
-    output = json.loads(response.choices[0].message.content)
-    return output
+    output = response["output"]["choices"][0]["text"]
+
+    # Debug print (optional)
+    # st.code(output)
+
+    return json.loads(output)
 
 
 # Generate dummy data
 def generate_dummy_data():
     return pd.DataFrame({
-        'CustomerId':
-        range(1001, 1021),
+        'CustomerId': range(1001, 1021),
         'Surname': [f'User{i}' for i in range(20)],
         'CreditScore': [650 + i % 50 for i in range(20)],
         'Geography': ['France', 'Spain', 'Germany', 'France'] * 5,
@@ -76,9 +70,7 @@ def generate_dummy_data():
 # App Title and Branding
 st.title("🧭 InsightPilot")
 st.caption("Navigate churn with product-led transformation")
-st.markdown(
-    "Upload a customer CSV file or generate sample data to explore churn patterns and insights."
-)
+st.markdown("Upload a customer CSV file or generate sample data to explore churn patterns and insights.")
 st.markdown("Click on 'Generate Dummy data' to explore the app.")
 
 # Action Buttons
@@ -116,7 +108,6 @@ if df is not None:
         st.subheader("📌 Key KPIs")
         total_customers = len(df)
         churn_rate = df['Exited'].mean()
-        avg_age = df['Age'].mean()
         avg_credit = df['CreditScore'].mean()
 
         col1, col2, col3 = st.columns(3)
@@ -127,9 +118,7 @@ if df is not None:
         # Visualizations
         st.subheader("📊 Churn Breakdown")
         fig1, ax1 = plt.subplots()
-        df['Exited'].value_counts().plot(kind='bar',
-                                         ax=ax1,
-                                         color=['green', 'red'])
+        df['Exited'].value_counts().plot(kind='bar', ax=ax1, color=['green', 'red'])
         ax1.set_xticklabels(['Retained', 'Churned'], rotation=0)
         ax1.set_ylabel("Customers")
         ax1.set_title("Churn Distribution")
@@ -143,12 +132,7 @@ if df is not None:
 
         st.subheader("🎯 Age vs. Churn")
         fig3, ax3 = plt.subplots()
-        sns.histplot(data=df,
-                     x="Age",
-                     hue="Exited",
-                     bins=20,
-                     multiple="stack",
-                     ax=ax3)
+        sns.histplot(data=df, x="Age", hue="Exited", bins=20, multiple="stack", ax=ax3)
         ax3.set_title("Age Distribution by Churn Status")
         st.pyplot(fig3)
 
