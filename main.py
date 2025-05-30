@@ -6,13 +6,9 @@ import json
 import together
 from pydantic import BaseModel, Field
 
-# Get API key from Streamlit secrets
-api_key = st.secrets.get("TOGETHER_API_KEY")
-
-if not api_key:
-    st.error("❌ TOGETHER_API_KEY is missing in Streamlit secrets.")
-else:
-    client = together.Together(api_key=api_key)
+# Load Together API key from Streamlit secrets
+api_key = st.secrets["TOGETHER_API_KEY"]
+together.api_key = api_key  # Correct initialization
 
 # Define structured response schema
 class ChurnInsight(BaseModel):
@@ -36,7 +32,7 @@ def generate_churn_insight(df: pd.DataFrame):
     {data_sample}
     """
 
-    response = client.chat.completions.create(
+    response = together.chat.completions.create(
         model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
         messages=[
             {"role": "system", "content": "You are a product analyst. Reply ONLY in JSON."},
