@@ -6,8 +6,8 @@ import json
 import together
 from pydantic import BaseModel, Field
 
-# Initialize Together client using Streamlit secrets
-client = together.Together(api_key=st.secrets["TOGETHER_API_KEY"])
+# ✅ Initialize Together client without manually passing the API key
+client = together.Together()
 
 
 # Define structured response schema
