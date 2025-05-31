@@ -5,44 +5,57 @@ import seaborn as sns
 import json
 import re
 import together
+import time
 
-# Initialize Together client with API key from secrets
+# Set Together API key
 together.api_key = st.secrets["TOGETHER_API_KEY"]
+
+# Retry wrapper for Together API call
+def safe_generate(prompt, retries=3, wait=3):
+    for attempt in range(retries):
+        try:
+            return together.Complete.create(
+                prompt=prompt,
+                model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
+                max_tokens=512,
+                temperature=0.7,
+                stop=["```", "</json>"]
+            )
+        except Exception as e:
+            if attempt < retries - 1:
+                time.sleep(wait)
+            else:
+                raise e
 
 # Generate AI churn insight
 def generate_churn_insight(df: pd.DataFrame):
-    data_sample = df.sample(n=min(50, len(df)), random_state=1).to_csv(index=False)
-    prompt = f"""
-You are a data analyst. Analyze the following customer churn dataset (CSV format).
-Respond ONLY in JSON with the following keys:
-"title", "summary", "actionItems" (list of strings).
+    sampled_df = df[['Age', 'CreditScore', 'Geography', 'Exited']].sample(
+        n=min(30, len(df)), random_state=1
+    )
+    data_sample = sampled_df.to_csv(index=False)
 
-Data:
+    prompt = f"""
+Analyze this CSV dataset of customer churn. Return ONLY a JSON with:
+- title: a short insight title
+- summary: a short analysis summary
+- actionItems: a list of actionable suggestions
+
+CSV Data:
 {data_sample}
 """
 
-    response = together.Complete.create(
-        prompt=prompt,
-        model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
-        max_tokens=512,
-        temperature=0.7,
-        stop=["```", "</json>"]
-    )
+    response = safe_generate(prompt)
+    st.code(response, language="json")  # Debug display
 
-    output_text = response["output"]["choices"][0]["text"].strip()
-
+    output_text = response.get("output", {}).get("choices", [{}])[0].get("text", "").strip()
     if not output_text:
         raise ValueError("Empty response from model")
-
-    # Debug output (optional)
-    # st.code(output_text, language="json")
 
     try:
         json_text = re.search(r"\{.*\}", output_text, re.DOTALL).group()
         return json.loads(json_text)
     except Exception:
         raise ValueError(f"Could not parse JSON. Model response:\n\n{output_text[:300]}")
-
 
 # Generate dummy data
 def generate_dummy_data():
@@ -62,14 +75,13 @@ def generate_dummy_data():
         'Exited': [0, 1] * 10
     })
 
-
-# App Title and Branding
+# App UI
 st.title("🧭 InsightPilot")
 st.caption("Navigate churn with product-led transformation")
 st.markdown("Upload a customer CSV file or generate sample data to explore churn patterns and insights.")
 st.markdown("Click on 'Generate Dummy data' to explore the app.")
 
-# Action Buttons
+# Action buttons
 col_btn1, col_btn2 = st.columns([1, 1])
 with col_btn1:
     if st.button("🧪 Generate Dummy Data", use_container_width=True):
@@ -80,10 +92,8 @@ with col_btn2:
         st.session_state.clear()
         st.rerun()
 
-# File Upload
 uploaded_file = st.file_uploader("📤 Upload CSV", type=["csv", "txt"])
 
-# Load Data
 if "dummy_data" in st.session_state:
     df = st.session_state["dummy_data"]
 elif uploaded_file:
@@ -91,7 +101,6 @@ elif uploaded_file:
 else:
     df = None
 
-# Main Logic
 if df is not None:
     try:
         st.subheader("📄 Data Preview")
@@ -104,7 +113,6 @@ if df is not None:
         st.subheader("📌 Key KPIs")
         total_customers = len(df)
         churn_rate = df['Exited'].mean()
-        avg_age = df['Age'].mean()
         avg_credit = df['CreditScore'].mean()
 
         col1, col2, col3 = st.columns(3)
@@ -112,7 +120,7 @@ if df is not None:
         col2.metric("Churn Rate", f"{churn_rate * 100:.2f}%")
         col3.metric("Avg. Credit Score", f"{avg_credit:.0f}")
 
-        # Visualizations
+        # Visuals
         st.subheader("📊 Churn Breakdown")
         fig1, ax1 = plt.subplots()
         df['Exited'].value_counts().plot(kind='bar', ax=ax1, color=['green', 'red'])
@@ -140,7 +148,7 @@ if df is not None:
         ax4.set_title("Credit Score Distribution by Churn")
         st.pyplot(fig4)
 
-        # AI Insight
+        # LLM Insight
         st.subheader("🧠 AI-Generated Churn Insight")
         with st.spinner("Analyzing data..."):
             try:
@@ -155,3 +163,4 @@ if df is not None:
 
     except Exception as e:
         st.error(f"❌ Error processing data: {e}")
+
