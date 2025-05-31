@@ -85,6 +85,12 @@ with col_btn2:
         st.session_state.clear()
         st.rerun()
 
+# Kaggle Dataset Link
+st.markdown(
+    "[📊 Link to Kaggle customer churn dataset](https://www.kaggle.com/datasets/anandshaw2001/customer-churn-dataset)",
+    unsafe_allow_html=True
+)
+
 # File Upload
 uploaded_file = st.file_uploader("📤 Upload CSV", type=["csv", "txt"])
 
