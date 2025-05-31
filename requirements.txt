@@ -4,5 +4,5 @@ matplotlib
 seaborn
 plotly
 numpy
-together==0.2.10
+together>=1.1.0
 pydantic>=2.0,<3.0
